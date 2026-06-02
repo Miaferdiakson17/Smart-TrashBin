@@ -22,10 +22,10 @@ class SmartBinAPI:
         # =================================================
         # KONFIGURASI LINK KREDENSIAL DATABASE SUPABASE & TELEGRAM BOT
         # =================================================
-        self.SUPABASE_URL       = "https://hjxdtogcfmutvjcxgkja.supabase.co"
-        self.SUPABASE_KEY       = "sb_publishable_sr2aTuvxjvfJYsXkGBuW7w_4o7-UVTt"
-        self.TELEGRAM_BOT_TOKEN = "8883250184:AAH8h2XWcCkksOrFYiCzSDe8Na3sV9Sm0MY"
-        self.TELEGRAM_CHAT_ID   = "5485441122"
+        self.SUPABASE_URL       = ""
+        self.SUPABASE_KEY       = ""
+        self.TELEGRAM_BOT_TOKEN = ""
+        self.TELEGRAM_CHAT_ID   = ""
 
         # Ukuran tinggi fisik tong sampah asli dalam satuan centimeter (cm)
         self.BIN_HEIGHT_CM = 30
