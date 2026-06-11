@@ -1,5 +1,5 @@
 // ============================================================
-// SMART TRASH BIN IoT SYSTEM - DUAL BIN VERSION v2.3
+// SMART TRASH BIN IoT SYSTEM - DUAL BIN VERSION v2.5
 // ============================================================
 // FITUR:
 // 1. Dual tempat sampah (Organik & Non-Organik)
@@ -7,7 +7,7 @@
 // 3. Monitoring kapasitas sampah
 // 4. Koneksi Wi-Fi ESP32
 // 5. Kirim data JSON ke Backend Flask
-// 6. Data dikirim hanya jika status berubah
+// 6. Data dikirim jika status berubah ATAU setiap 30 detik
 // 7. Anti spam database
 // 8. Monitoring realtime Serial Monitor
 // 9. Deteksi sensor dicabut / error
@@ -15,6 +15,11 @@
 // 11. [v2.3] Pin sensor organik dipindah ke 22 & 21
 // 12. [v2.3] Saat sensor error, kirim 0% ke backend
 //           agar data lama tidak menggantung di server
+// 13. [v2.4] tinggiTong disesuaikan tong 10 liter = 20 cm
+// 14. [v2.4] Threshold kategori disinkronkan dengan backend:
+//           KOSONG < 30% | SETENGAH 30-79% | PENUH >= 80%
+// 15. [v2.4] Kirim data berkala setiap 30 detik
+// 16. [v2.5] INTEGRASI LED INDIKATOR (Merah = Penuh, Hijau = Aman)
 // ============================================================
 
 
@@ -40,7 +45,7 @@ const char* password = "achon900";
 // URL BACKEND FLASK
 // ============================================================
 
-const char* serverUrl = "http://10.145.235.220:5000/api/trash";
+const char* serverUrl = "https://trushbin.my.id/api/trash";
 
 
 // ============================================================
@@ -55,10 +60,27 @@ const char* serverUrl = "http://10.145.235.220:5000/api/trash";
 #define E_OBJ_ORG   5
 
 // Sensor volume organik
-// [v2.3] Dipindah dari pin 25/26 ke pin 22/21
 #define T_VOL_ORG  22
 #define E_VOL_ORG  21
 
+
+// [v2.5] LED Indikator Organik
+#define LED_ORG_MERAH  23  // Menyala saat penuh
+#define LED_ORG_HIJAU  15   // Menyala saat kOW
+
+// Tambahkan di bagian atas, setelah #define pin
+//#define LED_ON  LOW   // Active LOW: nyala = L
+//#define LED_OFF HIGH  // Active LOW: mati  = HIGH
+// Ganti define LED_ON / LED_OFF dengan fungsi ini
+
+void setLED(int pin, bool nyala) {
+  if (nyala) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);   // Nyalakan
+  } else {
+    pinMode(pin, INPUT);      // Benar-benar putus, tidak ada arus bocor
+  }
+}
 
 // ============================================================
 // PIN TEMPAT SAMPAH NON-ORGANIK
@@ -75,22 +97,20 @@ const char* serverUrl = "http://10.145.235.220:5000/api/trash";
 #define T_VOL_NON  33
 #define E_VOL_NON  35
 
+// [v2.5] LED Indikator Non-Organik
+#define LED_NON_MERAH  14  // Menyala saat penuh
+#define LED_NON_HIJAU  12  // Menyala saat kosong/setengah
+
 
 // ============================================================
 // PARAMETER SISTEM
 // ============================================================
 
-// Tinggi maksimal tempat sampah (cm) - disesuaikan tong 10 liter
-const int tinggiTong = 30;
-
-// Jarak deteksi tangan untuk buka tutup (cm)
+const int tinggiTong = 20;
 const int jarakBuka = 20;
-
-// Lama servo terbuka (ms)
 const long waktuTunggu = 5000;
-
-// Batas maksimal pembacaan sensor valid (cm)
 const int batasValidSensor = 200;
+const long intervalKirim = 30000;
 
 
 // ============================================================
@@ -113,10 +133,11 @@ bool isOpenNon = false;
 
 
 // ============================================================
-// TIMER SERIAL MONITOR
+// TIMER SERIAL MONITOR & KIRIM DATA
 // ============================================================
 
 unsigned long lastSerialPrint = 0;
+unsigned long lastKirimData = 0;
 
 
 // ============================================================
@@ -134,8 +155,6 @@ String lastStatusNon = "";
 bool errorSensorOrg = false;
 bool errorSensorNon = false;
 
-// [v2.3] Flag untuk tahu apakah sudah kirim reset ke backend
-// saat sensor error, agar tidak spam kirim 0%
 bool sudahKirimResetOrg = false;
 bool sudahKirimResetNon = false;
 
@@ -213,11 +232,7 @@ String hitungKategori(int persen) {
 // ============================================================
 // FUNGSI MENGIRIM DATA KE BACKEND
 // ============================================================
-void kirimDataKeBackend(
-  String binId,
-  String type,
-  int percentage
-) {
+void kirimDataKeBackend(String binId, String type, int percentage) {
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[ERROR] WIFI TERPUTUS!");
@@ -239,7 +254,6 @@ void kirimDataKeBackend(
   int responseCode = http.POST(jsonPayload);
 
   if (responseCode > 0) {
-
     Serial.println();
     Serial.println("=========== HTTP SUCCESS ===========");
     Serial.print("BIN ID     : "); Serial.println(binId);
@@ -247,10 +261,7 @@ void kirimDataKeBackend(
     Serial.print("PERCENTAGE : "); Serial.print(percentage); Serial.println("%");
     Serial.print("RESPONSE   : "); Serial.println(responseCode);
     Serial.println("====================================");
-  }
-
-  else {
-
+  } else {
     Serial.println();
     Serial.println("=========== HTTP FAILED ============");
     Serial.print("ERROR : ");
@@ -269,7 +280,6 @@ void setup() {
 
   Serial.begin(115200);
 
-
   // ==========================================================
   // SETUP PIN SENSOR ORGANIK
   // ==========================================================
@@ -287,8 +297,16 @@ void setup() {
   pinMode(E_OBJ_NON, INPUT_PULLDOWN);
 
   pinMode(T_VOL_NON, OUTPUT);
-  // GPIO 35 input-only, pull-down untuk cegah floating
   pinMode(E_VOL_NON, INPUT_PULLDOWN);
+
+
+  // ==========================================================
+  // [v2.5] SETUP PIN LED INDIKATOR
+  // ==========================================================
+  pinMode(LED_ORG_MERAH, OUTPUT);
+  pinMode(LED_ORG_HIJAU, OUTPUT);
+  pinMode(LED_NON_MERAH, OUTPUT);
+  pinMode(LED_NON_HIJAU, OUTPUT);
 
 
   // ==========================================================
@@ -312,16 +330,11 @@ void setup() {
 
   delay(1000);
 
-
-  // ==========================================================
-  // INFORMASI SISTEM
-  // ==========================================================
   Serial.println();
   Serial.println("====================================");
   Serial.println("SMART TRASH BIN SYSTEM ONLINE");
-  Serial.println("DUAL BIN VERSION v2.3");
+  Serial.println("DUAL BIN VERSION v2.5 + LED");
   Serial.println("====================================");
-
 
   setupWiFi();
 }
@@ -332,7 +345,6 @@ void setup() {
 // ============================================================
 void loop() {
 
-  // Auto reconnect WiFi
   if (WiFi.status() != WL_CONNECTED) {
     WiFi.begin(ssid, password);
   }
@@ -353,38 +365,23 @@ void loop() {
   int persenOrg = 0;
 
   if (!sensorValid(dVolOrg)) {
-
-    // Sensor error / dicabut
     errorSensorOrg = true;
     persenOrg = 0;
 
     Serial.println("[WARNING] SENSOR VOLUME ORGANIK ERROR / DICABUT!");
 
-    // [v2.3] Kirim 0% ke backend SEKALI saat sensor baru error
-    // agar data lama tidak menggantung di server
     if (!sudahKirimResetOrg) {
-
       Serial.println("[INFO] RESET DATA ORGANIK KE BACKEND...");
-
       kirimDataKeBackend("BIN-01", "Organik", 0);
-
       sudahKirimResetOrg = true;
       lastStatusOrg = "ERROR";
     }
-  }
-
-  else {
-
-    // Sensor kembali normal
+  } else {
     errorSensorOrg = false;
-
-    // [v2.3] Reset flag agar siap kirim reset lagi jika error berikutnya
     sudahKirimResetOrg = false;
 
     if (dVolOrg > tinggiTong) dVolOrg = tinggiTong;
-
     persenOrg = ((float)(tinggiTong - dVolOrg) / tinggiTong) * 100;
-
     if (persenOrg < 0) persenOrg = 0;
   }
 
@@ -393,26 +390,17 @@ void loop() {
   // LOGIKA SERVO ORGANIK
   // ==========================================================
 
-  if (
-    !isOpenOrg &&
-    !errorSensorOrg &&
-    persenOrg < 80 &&
-    dObjOrg <= jarakBuka
-  ) {
-
+  if (!isOpenOrg && !errorSensorOrg && persenOrg < 80 && dObjOrg <= jarakBuka) {
     Serial.println();
     Serial.println("[EVENT] ORGANIK TERBUKA");
-
     servoOrg.write(10);
     isOpenOrg = true;
     waktuBukaOrg = now;
   }
 
   if (isOpenOrg && (now - waktuBukaOrg >= waktuTunggu)) {
-
     Serial.println();
     Serial.println("[EVENT] ORGANIK TERTUTUP");
-
     servoOrg.write(120);
     isOpenOrg = false;
   }
@@ -431,38 +419,23 @@ void loop() {
   int persenNon = 0;
 
   if (!sensorValid(dVolNon)) {
-
-    // Sensor error / dicabut
     errorSensorNon = true;
     persenNon = 0;
 
     Serial.println("[WARNING] SENSOR VOLUME NON-ORGANIK ERROR / DICABUT!");
 
-    // [v2.3] Kirim 0% ke backend SEKALI saat sensor baru error
-    // agar data lama tidak menggantung di server
     if (!sudahKirimResetNon) {
-
       Serial.println("[INFO] RESET DATA NON-ORGANIK KE BACKEND...");
-
       kirimDataKeBackend("BIN-02", "Non-Organik", 0);
-
       sudahKirimResetNon = true;
       lastStatusNon = "ERROR";
     }
-  }
-
-  else {
-
-    // Sensor kembali normal
+  } else {
     errorSensorNon = false;
-
-    // [v2.3] Reset flag agar siap kirim reset lagi jika error berikutnya
     sudahKirimResetNon = false;
 
     if (dVolNon > tinggiTong) dVolNon = tinggiTong;
-
     persenNon = ((float)(tinggiTong - dVolNon) / tinggiTong) * 100;
-
     if (persenNon < 0) persenNon = 0;
   }
 
@@ -471,26 +444,17 @@ void loop() {
   // LOGIKA SERVO NON-ORGANIK
   // ==========================================================
 
-  if (
-    !isOpenNon &&
-    !errorSensorNon &&
-    persenNon < 80 &&
-    dObjNon <= jarakBuka
-  ) {
-
+  if (!isOpenNon && !errorSensorNon && persenNon < 80 && dObjNon <= jarakBuka) {
     Serial.println();
     Serial.println("[EVENT] NON-ORGANIK TERBUKA");
-
     servoNon.write(10);
     isOpenNon = true;
     waktuBukaNon = now;
   }
 
   if (isOpenNon && (now - waktuBukaNon >= waktuTunggu)) {
-
     Serial.println();
     Serial.println("[EVENT] NON-ORGANIK TERTUTUP");
-
     servoNon.write(120);
     isOpenNon = false;
   }
@@ -500,24 +464,61 @@ void loop() {
   // CEK STATUS TEMPAT SAMPAH
   // ==========================================================
 
-  String currentStatusOrg = errorSensorOrg
-    ? "ERROR"
-    : hitungKategori(persenOrg);
-
-  String currentStatusNon = errorSensorNon
-    ? "ERROR"
-    : hitungKategori(persenNon);
+  String currentStatusOrg = errorSensorOrg ? "ERROR" : hitungKategori(persenOrg);
+  String currentStatusNon = errorSensorNon ? "ERROR" : hitungKategori(persenNon);
 
 
   // ==========================================================
-  // JIKA STATUS ORGANIK BERUBAH
+// ==========================================================
+  // [v2.5] KONTROL FISIK LAMPU LED INDIKATOR (UJI LOGIKA TERBALIK)
   // ==========================================================
-  if (currentStatusOrg != lastStatusOrg) {
+ // --- KONTROL LED ORGANIK ---
+if (currentStatusOrg == "PENUH") {
+    setLED(LED_ORG_HIJAU, false);
+    setLED(LED_ORG_MERAH, true);
+} 
+else if (currentStatusOrg == "SETENGAH" || currentStatusOrg == "KOSONG") {
+    setLED(LED_ORG_MERAH, false);
+    setLED(LED_ORG_HIJAU, true);
+} 
+else {
+    setLED(LED_ORG_MERAH, false);
+    setLED(LED_ORG_HIJAU, false);
+}
+
+// --- KONTROL LED NON-ORGANIK ---
+if (currentStatusNon == "PENUH") {
+    setLED(LED_NON_HIJAU, false);
+    setLED(LED_NON_MERAH, true);
+} 
+else if (currentStatusNon == "SETENGAH" || currentStatusNon == "KOSONG") {
+    setLED(LED_NON_MERAH, false);
+    setLED(LED_NON_HIJAU, true);
+} 
+else {
+    setLED(LED_NON_MERAH, false);
+    setLED(LED_NON_HIJAU, false);
+}
+
+  // ==========================================================
+  // FLAG KIRIM BERKALA (setiap 30 detik)
+  // ==========================================================
+
+  bool waktuyaKirim = (now - lastKirimData >= intervalKirim);
+
+
+  // ==========================================================
+  // JIKA STATUS ORGANIK BERUBAH ATAU WAKTUNYA KIRIM BERKALA
+  // ==========================================================
+  if (currentStatusOrg != lastStatusOrg || waktuyaKirim) {
 
     Serial.println();
-    Serial.println("[INFO] STATUS ORGANIK BERUBAH");
+    if (currentStatusOrg != lastStatusOrg) {
+      Serial.println("[INFO] STATUS ORGANIK BERUBAH - KIRIM DATA");
+    } else {
+      Serial.println("[INFO] KIRIM DATA ORGANIK BERKALA (30 detik)");
+    }
 
-    // Hanya kirim jika sensor tidak error
     if (!errorSensorOrg) {
       kirimDataKeBackend("BIN-01", "Organik", persenOrg);
     }
@@ -527,19 +528,30 @@ void loop() {
 
 
   // ==========================================================
-  // JIKA STATUS NON-ORGANIK BERUBAH
+  // JIKA STATUS NON-ORGANIK BERUBAH ATAU WAKTUNYA KIRIM BERKALA
   // ==========================================================
-  if (currentStatusNon != lastStatusNon) {
+  if (currentStatusNon != lastStatusNon || waktuyaKirim) {
 
     Serial.println();
-    Serial.println("[INFO] STATUS NON-ORGANIK BERUBAH");
+    if (currentStatusNon != lastStatusNon) {
+      Serial.println("[INFO] STATUS NON-ORGANIK BERUBAH - KIRIM DATA");
+    } else {
+      Serial.println("[INFO] KIRIM DATA NON-ORGANIK BERKALA (30 detik)");
+    }
 
-    // Hanya kirim jika sensor tidak error
     if (!errorSensorNon) {
       kirimDataKeBackend("BIN-02", "Non-Organik", persenNon);
     }
 
     lastStatusNon = currentStatusNon;
+  }
+
+
+  // ==========================================================
+  // UPDATE TIMER KIRIM BERKALA
+  // ==========================================================
+  if (waktuyaKirim) {
+    lastKirimData = now;
   }
 
 
@@ -553,20 +565,14 @@ void loop() {
 
     Serial.printf(
       "[ORGANIK]     Tangan: %2d cm | Isi: %3d%% (%s)%s | Servo: %s\n",
-      dObjOrg,
-      persenOrg,
-      currentStatusOrg.c_str(),
-      errorSensorOrg ? " [!]" : "",
-      isOpenOrg ? "BUKA" : "TUTUP"
+      dObjOrg, persenOrg, currentStatusOrg.c_str(),
+      errorSensorOrg ? " [!]" : "", isOpenOrg ? "BUKA" : "TUTUP"
     );
 
     Serial.printf(
       "[NON-ORGANIK] Tangan: %2d cm | Isi: %3d%% (%s)%s | Servo: %s\n",
-      dObjNon,
-      persenNon,
-      currentStatusNon.c_str(),
-      errorSensorNon ? " [!]" : "",
-      isOpenNon ? "BUKA" : "TUTUP"
+      dObjNon, persenNon, currentStatusNon.c_str(),
+      errorSensorNon ? " [!]" : "", isOpenNon ? "BUKA" : "TUTUP"
     );
 
     Serial.printf(
