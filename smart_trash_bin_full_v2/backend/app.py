@@ -33,7 +33,7 @@ class SmartBinAPI:
         # KONFIGURASI SUPABASE & TELEGRAM
         # =================================================
         self.SUPABASE_URL       = os.environ.get("SUPABASE_URL", "https://hjxdtogcfmutvjcxgkja.supabase.co")
-        self.SUPABASE_KEY       = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqeGR0b2djZm11dHZqY3hna2phIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MT75MzE5MjIzLCJleHAiOjIwOTA4OTUyMjNfQ.O45SYx9xpu10Vv1e0TGYC5fGLnB1shy67R8wrPW9tq0")
+        self.SUPABASE_KEY       = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqeGR0b2djZm11dHZqY3hna2phIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTMxOTIyMywiZXhwIjoyMDkwODk1MjIzfQ.O45SYx9xpu10Vv1e0TGYC5fGLnB1shy67R8wrPW9tq0")
         self.TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8787423520:AAFGtFj-SVl17DablQKwYMR1ecvS1_GEDII")
         self.TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "-1003824268641")
 
