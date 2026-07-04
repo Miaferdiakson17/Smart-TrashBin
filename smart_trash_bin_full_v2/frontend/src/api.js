@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Mengarah ke backend Flask lokal (Port 5000)
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL = "http://127.0.0.1:5000/api";
 
 const api = axios.create({
   baseURL: BASE_URL,

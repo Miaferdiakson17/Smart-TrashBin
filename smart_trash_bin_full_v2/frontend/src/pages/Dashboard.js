@@ -290,7 +290,7 @@ function Dashboard() {
         </div>
 
         <button onClick={handleLogout} style={{ marginTop: 'auto', zIndex: 2, width: 'calc(100% - 30px)', padding: '12px', border: '2px dashed rgba(255,255,255, 0.6)', borderRadius: '14px', backgroundColor: 'transparent', color: '#FFFFFF', fontWeight: '700', cursor: 'pointer' }}>
-          🚪 Leave Dashboard
+   Logout
         </button>
       </div>
 
