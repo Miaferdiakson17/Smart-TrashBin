@@ -109,7 +109,7 @@ function Dashboard() {
   const getStatusColor = (status, isNonOrganik = false) => {
     if (status === 'FULL') return '#FF3333';       
     if (status === 'HALF') return isNonOrganik ? '#FFD600' : '#FF9900'; 
-    return '#00FF66';                               
+    return '#00FF66';                                
   };
 
   // =====================================================
@@ -132,8 +132,9 @@ function Dashboard() {
 
     setIsUpdating(true);
     try {
+      // PERBAIKAN UTAMA: current_email diisi selectedAdminEmail (email admin yang sedang diedit), bukan currentEmail (Julio)
       const response = await apiService.updateProfile({
-        current_email: currentEmail,        
+        current_email: selectedAdminEmail,        
         target_email: selectedAdminEmail,   
         name: editName,
         new_email: editEmail,
@@ -209,7 +210,7 @@ function Dashboard() {
   // =====================================================
   const handleLogout = () => {
     const confirmLogout = window.confirm("Are you sure you want to log out from the Smart Trash Bin Dashboard?");
-    if (!confirmLogout) return; // Menghentikan proses logout jika user memilih 'Cancel'
+    if (!confirmLogout) return; 
 
     localStorage.clear(); 
     alert("Logout successful!");
@@ -274,9 +275,6 @@ function Dashboard() {
             <span>📋</span> <span>Trash History Log</span>
           </button>
 
-          {/* ===================================================== */}
-          {/* PROTEKSI SIDEBAR: MENU INI HILANG JIKA YANG LOGIN ADMIN BIASA */}
-          {/* ===================================================== */}
           {(userRole === "SUPER_ADMIN" || currentEmail === "julio@gmail.com") && (
             <button onClick={() => { setActiveMenu('admin'); setSelectedAdminEmail(null); }} className="menu-btn" style={{ display: 'flex', alignItems: 'center', gap: '15px', width: '100%', padding: '14px 20px', borderRadius: '14px', border: 'none', cursor: 'pointer', fontSize: '15px', fontWeight: '700', color: activeMenu === 'admin' ? '#00AA44' : '#FFFFFF', backgroundColor: activeMenu === 'admin' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.15)', boxShadow: activeMenu === 'admin' ? '0 8px 16px rgba(0, 0, 0, 0.08)' : 'none' }}>
               <span>👥</span> 
@@ -394,7 +392,7 @@ function Dashboard() {
           </div>
         )}
 
-        {/* VIEW 3: SYSTEM CONTROLLERS PANEL (HANYA UNTUK JULIO / SUPER ADMIN) */}
+        {/* VIEW 3: SYSTEM CONTROLLERS PANEL (KHUSUS KEPALA ASRAMA / SUPER ADMIN) */}
         {activeMenu === 'admin' && (userRole === "SUPER_ADMIN" || currentEmail === "julio@gmail.com") && (
           <div>
             
@@ -463,7 +461,7 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* ACTIVE CONTROLLERS LIST + TOMBOL EDIT & DELETE */}
+            {/* ACTIVE CONTROLLERS LIST */}
             <div>
               <h2 style={{ fontSize: '22px', marginBottom: '20px', color: '#004D26', fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: '700' }}>
                 👥 Active System Controllers (Admin List)
