@@ -205,9 +205,12 @@ function Dashboard() {
   };
 
   // =====================================================
-  // FUNGSI LOGOUT & DELETE DATA SAMPAH
+  // FUNGSI LOGOUT DENGAN KONFIRMASI KELUAR
   // =====================================================
   const handleLogout = () => {
+    const confirmLogout = window.confirm("Are you sure you want to log out from the Smart Trash Bin Dashboard?");
+    if (!confirmLogout) return; // Menghentikan proses logout jika user memilih 'Cancel'
+
     localStorage.clear(); 
     alert("Logout successful!");
     window.location.href = "/";
@@ -290,7 +293,7 @@ function Dashboard() {
         </div>
 
         <button onClick={handleLogout} style={{ marginTop: 'auto', zIndex: 2, width: 'calc(100% - 30px)', padding: '12px', border: '2px dashed rgba(255,255,255, 0.6)', borderRadius: '14px', backgroundColor: 'transparent', color: '#FFFFFF', fontWeight: '700', cursor: 'pointer' }}>
-   Logout
+          🚪 Logout System
         </button>
       </div>
 
